@@ -1,0 +1,457 @@
+'use client';
+
+import { useRef, useState, useEffect } from 'react';
+import { useVideoPlayer, useKeyPress } from '@/hooks';
+import type { Movie } from '@/types';
+
+interface VideoPlayerProps {
+    movie: Movie;
+    onClose: () => void;
+    autoPlay?: boolean;
+}
+
+export default function VideoPlayer({ movie, onClose, autoPlay = true }: VideoPlayerProps) {
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    const {
+        playing,
+        currentTime,
+        duration,
+        volume,
+        muted,
+        progress,
+        togglePlay,
+        seek,
+        changeVolume,
+        toggleMute,
+        skipForward,
+        skipBackward,
+    } = useVideoPlayer(videoRef);
+
+    const [showControls, setShowControls] = useState(true);
+    const [isFullscreen, setIsFullscreen] = useState(false);
+    const [quality, setQuality] = useState<'auto' | '480p' | '720p' | '1080p' | '4k'>('auto');
+    const [showSettings, setShowSettings] = useState(false);
+    const [subtitlesEnabled, setSubtitlesEnabled] = useState(false);
+    const hideControlsTimeout = useRef<NodeJS.Timeout | undefined>(undefined);
+
+    // Keyboard shortcuts
+    useKeyPress(' ', togglePlay); // Spacebar
+    useKeyPress('ArrowLeft', () => skipBackward(10));
+    useKeyPress('ArrowRight', () => skipForward(10));
+    useKeyPress('m', toggleMute);
+    useKeyPress('f', toggleFullscreen);
+    useKeyPress('Escape', handleExit);
+
+    useEffect(() => {
+        if (autoPlay && videoRef.current) {
+            videoRef.current.play();
+        }
+    }, [autoPlay]);
+
+    useEffect(() => {
+        const resetHideControlsTimer = () => {
+            setShowControls(true);
+            if (hideControlsTimeout.current) {
+                clearTimeout(hideControlsTimeout.current);
+            }
+            if (playing) {
+                hideControlsTimeout.current = setTimeout(() => {
+                    setShowControls(false);
+                }, 3000);
+            }
+        };
+
+        const container = containerRef.current;
+        if (container) {
+            container.addEventListener('mousemove', resetHideControlsTimer);
+            container.addEventListener('click', resetHideControlsTimer);
+        }
+
+        return () => {
+            if (container) {
+                container.removeEventListener('mousemove', resetHideControlsTimer);
+                container.removeEventListener('click', resetHideControlsTimer);
+            }
+            if (hideControlsTimeout.current) {
+                clearTimeout(hideControlsTimeout.current);
+            }
+        };
+    }, [playing]);
+
+    function toggleFullscreen() {
+        if (!document.fullscreenElement) {
+            containerRef.current?.requestFullscreen();
+            setIsFullscreen(true);
+        } else {
+            document.exitFullscreen();
+            setIsFullscreen(false);
+        }
+    }
+
+    function handleExit() {
+        if (document.fullscreenElement) {
+            document.exitFullscreen();
+        }
+        onClose();
+    }
+
+    function formatTime(seconds: number): string {
+        const hrs = Math.floor(seconds / 3600);
+        const mins = Math.floor((seconds % 3600) / 60);
+        const secs = Math.floor(seconds % 60);
+
+        if (hrs > 0) {
+            return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    function handleProgressClick(e: React.MouseEvent<HTMLDivElement>) {
+        const rect = e.currentTarget.getBoundingClientRect();
+        const pos = (e.clientX - rect.left) / rect.width;
+        seek(pos * duration);
+    }
+
+    return (
+        <div
+            ref={containerRef}
+            style={{
+                position: 'fixed',
+                inset: 0,
+                background: '#000',
+                zIndex: 9999,
+                display: 'flex',
+                flexDirection: 'column',
+            }}
+        >
+            {/* Video Element */}
+            <video
+                ref={videoRef}
+                src={movie.videoUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'}
+                style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain',
+                }}
+                onClick={togglePlay}
+            />
+
+            {/* Controls Overlay */}
+            <div
+                style={{
+                    position: 'absolute',
+                    inset: 0,
+                    background: showControls ? 'linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, transparent 20%, transparent 80%, rgba(0,0,0,0.7) 100%)' : 'transparent',
+                    opacity: showControls ? 1 : 0,
+                    transition: 'opacity 0.3s',
+                    pointerEvents: showControls ? 'auto' : 'none',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                }}
+            >
+                {/* Top Bar */}
+                <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    padding: '20px',
+                }}>
+                    <button
+                        onClick={handleExit}
+                        style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#fff',
+                            cursor: 'pointer',
+                            fontSize: '32px',
+                            padding: '10px',
+                        }}
+                    >
+                        ←
+                    </button>
+
+                    <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+                        <span style={{ color: '#fff', fontSize: '18px', fontWeight: '600' }}>
+                            {movie.title}
+                        </span>
+                    </div>
+
+                    <div style={{ width: '52px' }} /> {/* Spacer for balance */}
+                </div>
+
+                {/* Center Play Button (when paused) */}
+                {!playing && (
+                    <div style={{
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        flex: 1,
+                    }}>
+                        <button
+                            onClick={togglePlay}
+                            style={{
+                                background: 'rgba(255,255,255,0.2)',
+                                border: '3px solid #fff',
+                                borderRadius: '50%',
+                                width: '80px',
+                                height: '80px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                            }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.background = 'rgba(255,255,255,0.3)';
+                                e.currentTarget.style.transform = 'scale(1.1)';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'rgba(255,255,255,0.2)';
+                                e.currentTarget.style.transform = 'scale(1)';
+                            }}
+                        >
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="#fff">
+                                <polygon points="8,5 19,12 8,19" />
+                            </svg>
+                        </button>
+                    </div>
+                )}
+
+                {/* Bottom Controls */}
+                <div style={{ padding: '20px' }}>
+                    {/* Progress Bar */}
+                    <div
+                        onClick={handleProgressClick}
+                        style={{
+                            width: '100%',
+                            height: '6px',
+                            background: 'rgba(255,255,255,0.3)',
+                            borderRadius: '3px',
+                            cursor: 'pointer',
+                            marginBottom: '15px',
+                            position: 'relative',
+                        }}
+                    >
+                        <div
+                            style={{
+                                width: `${progress}%`,
+                                height: '100%',
+                                background: '#E50914',
+                                borderRadius: '3px',
+                                transition: 'width 0.1s',
+                            }}
+                        />
+                    </div>
+
+                    {/* Control Buttons */}
+                    <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                    }}>
+                        {/* Left Controls */}
+                        <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+                            {/* Play/Pause */}
+                            <button
+                                onClick={togglePlay}
+                                style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    color: '#fff',
+                                    cursor: 'pointer',
+                                    padding: '5px',
+                                }}
+                            >
+                                {playing ? (
+                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                                        <rect x="6" y="4" width="4" height="16" />
+                                        <rect x="14" y="4" width="4" height="16" />
+                                    </svg>
+                                ) : (
+                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                                        <polygon points="8,5 19,12 8,19" />
+                                    </svg>
+                                )}
+                            </button>
+
+                            {/* Skip Backward */}
+                            <button
+                                onClick={() => skipBackward(10)}
+                                style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    color: '#fff',
+                                    cursor: 'pointer',
+                                    padding: '5px',
+                                }}
+                            >
+                                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M19 12L5 12M12 19L5 12L12 5" />
+                                </svg>
+                            </button>
+
+                            {/* Skip Forward */}
+                            <button
+                                onClick={() => skipForward(10)}
+                                style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    color: '#fff',
+                                    cursor: 'pointer',
+                                    padding: '5px',
+                                }}
+                            >
+                                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M5 12L19 12M12 5L19 12L12 19" />
+                                </svg>
+                            </button>
+
+                            {/* Volume */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <button
+                                    onClick={toggleMute}
+                                    style={{
+                                        background: 'transparent',
+                                        border: 'none',
+                                        color: '#fff',
+                                        cursor: 'pointer',
+                                        padding: '5px',
+                                    }}
+                                >
+                                    {muted || volume === 0 ? (
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z" />
+                                        </svg>
+                                    ) : (
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
+                                        </svg>
+                                    )}
+                                </button>
+
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="1"
+                                    step="0.01"
+                                    value={volume}
+                                    onChange={(e) => changeVolume(parseFloat(e.target.value))}
+                                    style={{
+                                        width: '80px',
+                                        cursor: 'pointer',
+                                    }}
+                                />
+                            </div>
+
+                            {/* Time Display */}
+                            <span style={{ color: '#fff', fontSize: '14px', minWidth: '100px' }}>
+                                {formatTime(currentTime)} / {formatTime(duration)}
+                            </span>
+                        </div>
+
+                        {/* Right Controls */}
+                        <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+                            {/* Subtitles */}
+                            <button
+                                onClick={() => setSubtitlesEnabled(!subtitlesEnabled)}
+                                style={{
+                                    background: subtitlesEnabled ? 'rgba(255,255,255,0.2)' : 'transparent',
+                                    border: 'none',
+                                    color: '#fff',
+                                    cursor: 'pointer',
+                                    padding: '8px',
+                                    borderRadius: '4px',
+                                }}
+                            >
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM4 12h4v2H4v-2zm10 6H4v-2h10v2zm6 0h-4v-2h4v2zm0-4H10v-2h10v2z" />
+                                </svg>
+                            </button>
+
+                            {/* Settings */}
+                            <div style={{ position: 'relative' }}>
+                                <button
+                                    onClick={() => setShowSettings(!showSettings)}
+                                    style={{
+                                        background: showSettings ? 'rgba(255,255,255,0.2)' : 'transparent',
+                                        border: 'none',
+                                        color: '#fff',
+                                        cursor: 'pointer',
+                                        padding: '8px',
+                                        borderRadius: '4px',
+                                    }}
+                                >
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
+                                    </svg>
+                                </button>
+
+                                {showSettings && (
+                                    <div style={{
+                                        position: 'absolute',
+                                        bottom: '100%',
+                                        right: 0,
+                                        marginBottom: '10px',
+                                        background: 'rgba(0,0,0,0.9)',
+                                        border: '1px solid rgba(255,255,255,0.2)',
+                                        borderRadius: '4px',
+                                        padding: '10px',
+                                        minWidth: '150px',
+                                    }}>
+                                        <div style={{ color: '#fff', fontSize: '14px', marginBottom: '10px', fontWeight: '600' }}>
+                                            Quality
+                                        </div>
+                                        {(['auto', '480p', '720p', '1080p', '4k'] as const).map((q) => (
+                                            <button
+                                                key={q}
+                                                onClick={() => setQuality(q)}
+                                                style={{
+                                                    display: 'block',
+                                                    width: '100%',
+                                                    textAlign: 'left',
+                                                    padding: '8px',
+                                                    background: quality === q ? 'rgba(255,255,255,0.2)' : 'transparent',
+                                                    border: 'none',
+                                                    color: '#fff',
+                                                    cursor: 'pointer',
+                                                    fontSize: '13px',
+                                                    borderRadius: '2px',
+                                                }}
+                                            >
+                                                {q} {quality === q && '✓'}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Fullscreen */}
+                            <button
+                                onClick={toggleFullscreen}
+                                style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    color: '#fff',
+                                    cursor: 'pointer',
+                                    padding: '5px',
+                                }}
+                            >
+                                {isFullscreen ? (
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z" />
+                                    </svg>
+                                ) : (
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z" />
+                                    </svg>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}

@@ -6,7 +6,8 @@ import Billboard from '@/components/Billboard';
 import MovieRow from '@/components/MovieRow';
 import MovieModal from '@/components/MovieModal';
 import Footer from '@/components/Footer';
-import { categories, Movie } from '@/data/movies';
+import { categories } from '@/data/movies';
+import type { Movie } from '@/types';
 
 export default function Home() {
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);

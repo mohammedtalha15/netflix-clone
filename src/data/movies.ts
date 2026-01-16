@@ -1,16 +1,4 @@
-export interface Movie {
-    id: number;
-    title: string;
-    description: string;
-    thumbnailUrl: string;
-    videoUrl?: string;
-    duration: string;
-    genre: string[];
-    year: number;
-    maturityRating: string;
-    cast: string[];
-    match: number;
-}
+import type { Movie } from '@/types';
 
 export const movies: Movie[] = [
     {

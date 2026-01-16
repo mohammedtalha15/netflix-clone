@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Movie } from '@/data/movies';
+import type { Movie } from '@/types';
 
 interface MovieCardProps {
     movie: Movie;

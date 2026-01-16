@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { Movie } from '@/data/movies';
+import type { Movie } from '@/types';
 
 interface MovieModalProps {
     movie: Movie | null;
@@ -220,10 +220,10 @@ export default function MovieModal({ movie, isOpen, onClose }: MovieModalProps) 
 
                         {/* Right Column */}
                         <div style={{ flex: '1' }}>
-                            <p style={{ fontSize: '14px', marginBottom: '10px', color: '#777' }}>
+                            <p style={{ marginBottom: '12px' }}>
                                 <span style={{ color: '#777' }}>Cast: </span>
                                 <span style={{ color: '#fff' }}>
-                                    {movie.cast.join(', ')}
+                                    {movie?.cast?.join(', ') || 'Not available'}
                                 </span>
                             </p>
                             <p style={{ fontSize: '14px', color: '#777' }}>
@@ -300,7 +300,7 @@ export default function MovieModal({ movie, isOpen, onClose }: MovieModalProps) 
                         </p>
                         <p style={{ fontSize: '14px', color: '#777' }}>
                             <span>Cast: </span>
-                            <span style={{ color: '#fff' }}>{movie.cast.join(', ')}</span>
+                            <span style={{ color: '#fff' }}>{movie?.cast?.join(', ') || 'Not available'}</span>
                         </p>
                         <p style={{ fontSize: '14px', color: '#777' }}>
                             <span>Genres: </span>
